@@ -39,24 +39,25 @@ class ClientConnection:public Thread
   Layer3 *l3;
   /** debug output */
   Trace *t;
-  /** server */
+  /** my server */
   Server *s;
   /** buffer length*/
   unsigned buflen;
 
   void Run (pth_sem_t * stop);
+
 public:
   ClientConnection (Server * s, Layer3 * l3, Trace * tr, int fd);
   virtual ~ClientConnection ();
+
   /** reads a message and stores it in buf; aborts if stop occurs */
   int readmessage (pth_event_t stop);
   /** send a message and aborts if stop occurs */
   int sendmessage (int size, const uchar * msg, pth_event_t stop);
-  /** send a reject; aborts if stop occurs */
+  /** send a reject with EIB_INVALID_REQUEST; aborts if stop occurs */
   int sendreject (pth_event_t stop);
-  /** sends a reject with the code code; aborts, if stop occurs */
+  /** sends a reject with the code; aborts, if stop occurs */
   int sendreject (pth_event_t stop, int code);
-
 
   /** buffer*/
   uchar *buf;

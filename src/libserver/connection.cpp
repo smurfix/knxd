@@ -19,174 +19,63 @@
 
 #include "connection.h"
 
-A_Broadcast::A_Broadcast (Layer3 * l3, Trace * tr, ClientConnection * cc)
+A_ANY::A_ANY (Layer3 * l3, Trace * tr, ClientConnection * cc, const char *type)
 {
+  TRACEPRINTF (t, 7, this, "Open%s", type);
   t = tr;
-  TRACEPRINTF (t, 7, this, "OpenBroadcast");
   layer3 = l3;
   con = cc;
+  type_ = type;
   c = 0;
-  if (con->size != 5)
-    return;
-  c = new T_Broadcast (layer3, t, con->buf[4] != 0 ? 1 : 0);
-  if (!c->init ())
-    {
-      delete c;
-      c = 0;
-      return;
-    }
-  Start ();
+}
+
+A_ANY::~A_ANY ()
+{
+  TRACEPRINTF (t, 7, this, "Close%s", type_);
+  Stop ();
+  if (c)
+    delete c;
+}
+
+A_Broadcast::A_Broadcast (Layer3 * l3, Trace * tr, ClientConnection * cc)
+	: A_ANY(l3,tr,cc,"Broadcast")
+{
+  writeonly = (con->buf[4] != 0);
 }
 
 A_Group::A_Group (Layer3 * l3, Trace * tr, ClientConnection * cc)
+	: A_ANY(l3,tr,cc,"Group")
 {
-  t = tr;
-  TRACEPRINTF (t, 7, this, "OpenGroup");
-  layer3 = l3;
-  con = cc;
-  c = 0;
-  if (con->size != 5)
-    return;
-  c =
-    new T_Group (layer3, t, (con->buf[2] << 8) | (con->buf[3]),
-		 con->buf[4] != 0 ? 1 : 0);
-  if (!c->init ())
-    {
-      delete c;
-      c = 0;
-      return;
-    }
-  Start ();
+  groupaddr = (con->buf[2] << 8) | (con->buf[3];
+  writeonly = (con->buf[4] != 0);
 }
 
 A_TPDU::A_TPDU (Layer3 * l3, Trace * tr, ClientConnection * cc)
+	: A_ANY(l3,tr,cc,"TPDU")
 {
-  t = tr;
-  TRACEPRINTF (t, 7, this, "OpenTPDU");
-  layer3 = l3;
-  con = cc;
-  c = 0;
-  if (con->size != 5)
-    return;
-  c = new T_TPDU (layer3, t, (con->buf[2] << 8) | (con->buf[3]));
-  if (!c->init ())
-    {
-      delete c;
-      c = 0;
-      return;
-    }
-  Start ();
+  srcaddr = (con->buf[2] << 8) | (con->buf[3];
 }
 
 A_Individual::A_Individual (Layer3 * l3, Trace * tr, ClientConnection * cc)
+	: A_ANY(l3,tr,cc,"Individual")
 {
-  t = tr;
-  TRACEPRINTF (t, 7, this, "OpenIndividual");
-  layer3 = l3;
-  con = cc;
-  c = 0;
-  if (con->size != 5)
-    return;
-  c =
-    new T_Individual (layer3, t, (con->buf[2] << 8) | (con->buf[3]),
-		      con->buf[4] != 0 ? 1 : 0);
-  if (!c->init ())
-    {
-      delete c;
-      c = 0;
-      return;
-    }
-  Start ();
+  dest = (con->buf[2] << 8) | (con->buf[3];
+  write_only = (con->buf[4] != 0);
 }
 
 A_Connection::A_Connection (Layer3 * l3, Trace * tr, ClientConnection * cc)
+	: A_ANY(l3,tr,cc,"Connection")
 {
-  t = tr;
-  TRACEPRINTF (t, 7, this, "OpenGroup");
-  layer3 = l3;
-  con = cc;
-  c = 0;
-  if (con->size != 5)
-    return;
-  c = new T_Connection (layer3, t, (con->buf[2] << 8) | (con->buf[3]));
-  if (!c->init ())
-    {
-      delete c;
-      c = 0;
-      return;
-    }
-  Start ();
+  dest = (con->buf[2] << 8) | (con->buf[3];
 }
 
 A_GroupSocket::A_GroupSocket (Layer3 * l3, Trace * tr, ClientConnection * cc)
+	: A_ANY(l3,tr,cc,"GroupSocket")
 {
-  t = tr;
-  TRACEPRINTF (t, 7, this, "OpenGroupSocket");
-  layer3 = l3;
-  con = cc;
-  c = 0;
-  if (con->size != 5)
-    return;
-  c = new GroupSocket (layer3, t, con->buf[4] != 0 ? 1 : 0);
-  if (!c->init ())
-    {
-      delete c;
-      c = 0;
-      return;
-    }
-  Start ();
-}
-
-A_Broadcast::~A_Broadcast ()
-{
-  TRACEPRINTF (t, 7, this, "CloseBroadcast");
-  Stop ();
-  if (c)
-    delete c;
-}
-
-A_Group::~A_Group ()
-{
-  TRACEPRINTF (t, 7, this, "CloseGroup");
-  Stop ();
-  if (c)
-    delete c;
-}
-
-A_TPDU::~A_TPDU ()
-{
-  TRACEPRINTF (t, 7, this, "CloseTPDU");
-  Stop ();
-  if (c)
-    delete c;
-}
-
-A_Individual::~A_Individual ()
-{
-  TRACEPRINTF (t, 7, this, "CloseIndividual");
-  Stop ();
-  if (c)
-    delete c;
-}
-
-A_Connection::~A_Connection ()
-{
-  TRACEPRINTF (t, 7, this, "CloseConnection");
-  Stop ();
-  if (c)
-    delete c;
-}
-
-A_GroupSocket::~A_GroupSocket ()
-{
-  TRACEPRINTF (t, 7, this, "CloseGroupSocket");
-  Stop ();
-  if (c)
-    delete c;
 }
 
 void
-A_Broadcast::Do (pth_event_t stop)
+A_ANY::Do (pth_event_t stop)
 {
   if (!c)
     {
@@ -199,184 +88,129 @@ A_Broadcast::Do (pth_event_t stop)
     {
       if (con->readmessage (stop) == -1)
 	break;
+#if 0
       if (EIBTYPE (con->buf) == EIB_RESET_CONNECTION)
 	break;
-      if (con->size >= 2)
-	{
-	  if (EIBTYPE (con->buf) != EIB_APDU_PACKET)
-	    break;
-	  t->TracePacket (7, this, "Send", con->size - 2, con->buf + 2);
-	  c->Send (CArray (con->buf + 2, con->size - 2));
-	}
+#endif
+      if (EIBTYPE (con->buf) != EIB_APDU_PACKET)
+	break;
+      process_buffer();
     }
 }
 
 void
-A_Group::Do (pth_event_t stop)
+A_Broadcast::process_buffer ()
 {
-  if (!c)
-    {
-      con->sendreject (stop, EIB_PROCESSING_ERROR);
-      return;
-    }
-  if (con->sendmessage (2, con->buf, stop) == -1)
+  if (con->size < 2)
     return;
-  while (pth_event_status (stop) != PTH_STATUS_OCCURRED)
-    {
-      if (con->readmessage (stop) == -1)
-	break;
-      if (EIBTYPE (con->buf) == EIB_RESET_CONNECTION)
-	break;
-      if (con->size >= 2)
-	{
-	  if (EIBTYPE (con->buf) != EIB_APDU_PACKET)
-	    break;
-	  t->TracePacket (7, this, "Send", con->size - 2, con->buf + 2);
-	  c->Send (CArray (con->buf + 2, con->size - 2));
-	}
-    }
+  t->TracePacket (7, this, "Send", con->size - 2, con->buf + 2);
+
+  T_DATA_XXX_REQ_PDU t;
+  t.data = CArray (con->buf + 2, con->size - 2);
+  String s = t.Decode (this->t);
+  TRACEPRINTF (this->t, 4, this, "Send %s %s", type_, s ());
+
+  L_Data_PDU *l = new L_Data_PDU (FakeL2);
+  l->source = 0;
+  l->dest = 0;
+  l->AddrType = GroupAddress;
+  l->data = t.ToPacket ();
+  layer3->send_L_Data (l);
 }
 
 void
-A_TPDU::Do (pth_event_t stop)
+A_Group::process_buffer ()
 {
-  if (!c)
-    {
-      con->sendreject (stop, EIB_PROCESSING_ERROR);
-      return;
-    }
-  if (con->sendmessage (2, con->buf, stop) == -1)
+  if (con->size < 2)
     return;
-  while (pth_event_status (stop) != PTH_STATUS_OCCURRED)
-    {
-      if (con->readmessage (stop) == -1)
-	break;
-      if (EIBTYPE (con->buf) == EIB_RESET_CONNECTION)
-	break;
-      if (con->size >= 4)
-	{
-	  if (EIBTYPE (con->buf) != EIB_APDU_PACKET)
-	    break;
-	  t->TracePacket (7, this, "Send", con->size - 4, con->buf + 4);
-	  TpduComm p;
-	  p.data = CArray (con->buf + 4, con->size - 4);
-	  p.addr = (con->buf[2] << 8) | (con->buf[3]);
-	  c->Send (p);
-	}
-    }
+  t->TracePacket (7, this, "Send", con->size - 2, con->buf + 2);
+
+  T_DATA_XXX_REQ_PDU t;
+  t.data = CArray (con->buf + 2, con->size - 2);
+  String s = t.Decode (this->t);
+  TRACEPRINTF (this->t, 4, this, "Send %s %s", type_, s ());
+
+  L_Data_PDU *l = new L_Data_PDU (FakeL2);
+  l->source = 0;
+  l->dest = groupaddr;
+  l->AddrType = GroupAddress;
+  l->data = t.ToPacket ();
+  layer3->send_L_Data (l);
 }
 
 void
-A_Individual::Do (pth_event_t stop)
+A_TPDU::process_buffer ()
 {
-  if (!c)
-    {
-      con->sendreject (stop, EIB_PROCESSING_ERROR);
-      return;
-    }
-  if (con->sendmessage (2, con->buf, stop) == -1)
+  if (con->size < 4)
     return;
-  while (pth_event_status (stop) != PTH_STATUS_OCCURRED)
-    {
-      if (con->readmessage (stop) == -1)
-	break;
-      if (EIBTYPE (con->buf) == EIB_RESET_CONNECTION)
-	break;
-      if (con->size >= 2)
-	{
-	  if (EIBTYPE (con->buf) != EIB_APDU_PACKET)
-	    break;
-	  t->TracePacket (7, this, "Send", con->size - 2, con->buf + 2);
-	  c->Send (CArray (con->buf + 2, con->size - 2));
-	}
-    }
+  t->TracePacket (7, this, "Send", con->size - 4, con->buf + 4);
+  L_Data_PDU *l = new L_Data_PDU;
+  l->source = src;
+  l->dest = (con->buf[2] << 8) | (con->buf[3]);
+  l->AddrType = IndividualAddress;
+  l->data = CArray (con->buf + 4, con->size - 4);
+  layer3->send_L_Data (l);
 }
 
 void
-A_Connection::Do (pth_event_t stop)
+A_GroupSocket::process_buffer ()
 {
-  if (!c)
-    {
-      con->sendreject (stop, EIB_PROCESSING_ERROR);
-      return;
-    }
-  if (con->sendmessage (2, con->buf, stop) == -1)
+  if (con->size >= 4)
     return;
-  while (pth_event_status (stop) != PTH_STATUS_OCCURRED)
-    {
-      if (con->readmessage (stop) == -1)
-	break;
-      if (EIBTYPE (con->buf) == EIB_RESET_CONNECTION)
-	break;
-      if (con->size >= 2)
-	{
-	  if (EIBTYPE (con->buf) != EIB_APDU_PACKET)
-	    break;
-	  t->TracePacket (7, this, "Send", con->size - 2, con->buf + 2);
-	  c->Send (CArray (con->buf + 2, con->size - 2));
-	}
-    }
+  t->TracePacket (7, this, "Send", con->size - 4, con->buf + 4);
+  T_DATA_XXX_REQ_PDU t;
+  t.data = CArray (con->buf + 4, con->size - 4);
+  String s = t.Decode ();
+  TRACEPRINTF (this->t, 4, this, "Send %s %s", type_, s ());
+
+  L_Data_PDU *l = new L_Data_PDU;
+  l->source = 0;
+  l->dest = (con->buf[2] << 8) | (con->buf[3]);
+  l->AddrType = GroupAddress;
+  l->data = t.ToPacket ();
+  layer3->send_L_Data (l);
 }
 
 void
-A_GroupSocket::Do (pth_event_t stop)
+A_Individual::process_buffer ()
 {
-  if (!c)
-    {
-      con->sendreject (stop, EIB_PROCESSING_ERROR);
-      return;
-    }
-  if (con->sendmessage (2, con->buf, stop) == -1)
+  if (con->size < 2)
     return;
-  while (pth_event_status (stop) != PTH_STATUS_OCCURRED)
-    {
-      if (con->readmessage (stop) == -1)
-	break;
-      if (EIBTYPE (con->buf) == EIB_RESET_CONNECTION)
-	break;
-      if (con->size >= 4)
-	{
-	  if (EIBTYPE (con->buf) != EIB_GROUP_PACKET)
-	    break;
-	  t->TracePacket (7, this, "Send", con->size - 4, con->buf + 4);
-	  GroupAPDU p;
-	  p.data = CArray (con->buf + 4, con->size - 4);
-	  p.dst = (con->buf[2] << 8) | (con->buf[3]);
-	  c->Send (p);
-	}
-    }
+  t->TracePacket (7, this, "Send", con->size - 2, con->buf + 2);
+
+  T_DATA_XXX_REQ_PDU t;
+  t.data = CArray (con->buf + 2, con->size - 2);
+  String s = t.Decode (this->t);
+  TRACEPRINTF (this->t, 4, this, "Send %s %s", type_, s ());
+
+  L_Data_PDU *l = new L_Data_PDU (FakeL2);
+  l->source = 0;
+  l->dest = dest;
+  l->AddrType = IndividualAddress;
+  l->data = t.ToPacket ();
+  layer3->send_L_Data (l);
 }
 
 void
-A_Broadcast::Run (pth_sem_t * stop1)
+A_Connection::process_buffer ()
+{
+  if (con->size < 2)
+    return;
+  t->TracePacket (7, this, "Send", con->size - 2, con->buf + 2);
+
+  in.put (CArray (con->buf + 2, con->size - 2));
+  pth_sem_inc (&insem, 1);
+}
+
+
+
+void
+A_ANY::Run (pth_sem_t * stop1)
 {
   pth_event_t stop = pth_event (PTH_EVENT_SEM, stop1);
   while (pth_event_status (stop) != PTH_STATUS_OCCURRED)
     {
-      BroadcastComm *e = c->Get (stop);
-      if (e)
-	{
-	  CArray res;
-	  res.resize (4 + e->data ());
-	  EIBSETTYPE (res, EIB_APDU_PACKET);
-	  res[2] = (e->src >> 8) & 0xff;
-	  res[3] = (e->src) & 0xff;
-	  res.setpart (e->data.array (), 4, e->data ());
-	  t->TracePacket (7, this, "Recv", e->data);
-	  con->sendmessage (res (), res.array (), stop);
-	  delete e;
-	}
-    }
-  pth_event_free (stop, PTH_FREE_THIS);
-}
-
-void
-A_Group::Run (pth_sem_t * stop1)
-{
-  pth_event_t stop = pth_event (PTH_EVENT_SEM, stop1);
-  while (pth_event_status (stop) != PTH_STATUS_OCCURRED)
-    {
-      GroupComm *e = c->Get (stop);
+      Any_Comm *e = c->Get (stop);
       if (e)
 	{
 	  CArray res;
@@ -395,7 +229,6 @@ A_Group::Run (pth_sem_t * stop1)
 
 void
 A_TPDU::Run (pth_sem_t * stop1)
-{
   pth_event_t stop = pth_event (PTH_EVENT_SEM, stop1);
   while (pth_event_status (stop) != PTH_STATUS_OCCURRED)
     {

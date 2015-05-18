@@ -24,6 +24,7 @@
 #include "layer3.h"
 
 class ClientConnection;
+
 /** implements the frontend (but opens no connection) */
 class Server:protected Thread
 {

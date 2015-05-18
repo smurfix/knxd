@@ -24,17 +24,32 @@
 #include "client.h"
 
 /** implements client interface to a broadcast connection */
-class A_Broadcast:private Thread
+class A_ANY:private Thread
 {
   Layer3 *layer3;
   Trace *t;
   ClientConnection *con;
-  T_Broadcast *c;
+  T_ANY *c;
+  const char type_;
 
   void Run (pth_sem_t * stop);
 public:
+  A_ANY (Layer3 * l3, Trace * tr, ClientConnection * cc, const char *type);
+  ~A_ANY ();
+
+  /** start processing */
+  void Do (pth_event_t stop);
+  /** detail processing. Exit the loop when True */
+  virtual void process_buffer ();
+  virtual T_ANY *init_T () = 0;
+};
+
+class A_Broadcast:private Thread
+{
+public:
   A_Broadcast (Layer3 * l3, Trace * tr, ClientConnection * cc);
   ~A_Broadcast ();
+  bool writeonly;
 
   /** start processing */
   void Do (pth_event_t stop);
@@ -43,10 +58,8 @@ public:
 /** implements client interface to a group connection */
 class A_Group:private Thread
 {
-  Layer3 *layer3;
-  Trace *t;
-  ClientConnection *con;
-  T_Group *c;
+  eibaddr_t groupaddr;
+  bool writeonly;
 
   void Run (pth_sem_t * stop);
 public:
@@ -60,10 +73,7 @@ public:
 /** implements client interface to a raw connection */
 class A_TPDU:private Thread
 {
-  Layer3 *layer3;
-  Trace *t;
-  ClientConnection *con;
-  T_TPDU *c;
+  eibaddr_t srcaddr;
 
   void Run (pth_sem_t * stop);
 public:
@@ -77,10 +87,8 @@ public:
 /** implements client interface to a T_Indivdual connection */
 class A_Individual:private Thread
 {
-  Layer3 *layer3;
-  Trace *t;
-  ClientConnection *con;
-  T_Individual *c;
+  eibaddr_t dest;
+  bool write_only;
 
   void Run (pth_sem_t * stop);
 public:
@@ -94,10 +102,7 @@ public:
 /** implements client interface to a T_Connection connection */
 class A_Connection:private Thread
 {
-  Layer3 *layer3;
-  Trace *t;
-  ClientConnection *con;
-  T_Connection *c;
+  eibaddr_t dest;
 
   void Run (pth_sem_t * stop);
 public:
@@ -114,7 +119,6 @@ class A_GroupSocket:private Thread
   Layer3 *layer3;
   Trace *t;
   ClientConnection *con;
-  GroupSocket *c;
 
   void Run (pth_sem_t * stop);
 public:
