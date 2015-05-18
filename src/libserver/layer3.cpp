@@ -84,6 +84,7 @@ Layer3::send_L_Data (L_Data_PDU * l)
   for (int i = 0; i < layer2 (); i++)
     if (l->l2 != layer2[i].l2)
       layer2[i].l2->Send_L_Data (new L_Data_PDU (*l));
+  delete l;
 }
 
 void
