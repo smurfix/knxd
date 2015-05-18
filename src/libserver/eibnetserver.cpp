@@ -347,6 +347,7 @@ EIBnetServer::Run (pth_sem_t * stop1)
 		      break;
 		    }
                 }
+              close(sock_mac);
 	    }
           /* End MAC Address */
 
