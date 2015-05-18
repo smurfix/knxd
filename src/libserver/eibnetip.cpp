@@ -920,8 +920,8 @@ EIBnet_DescriptionResponse::EIBnet_DescriptionResponse ()
   KNXmedium = 0;
   devicestatus = 0;
   individual_addr = 0;
-  installid = 0;
-  memset (&serial, 0, sizeof (serial));
+  installid = 1;
+  memset (&serial, 1, sizeof (serial));
   multicastaddr.s_addr = 0;
   memset (&MAC, 0, sizeof (MAC));
   memset (&name, 0, sizeof (name));

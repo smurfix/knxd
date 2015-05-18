@@ -348,8 +348,6 @@ EIBnetServer::Run (pth_sem_t * stop1)
 		    }
                 }
 	    }
-
-
           /* End MAC Address */
 
 	  if (p1->service == SEARCH_REQUEST && discover)
@@ -378,8 +376,8 @@ EIBnetServer::Run (pth_sem_t * stop1)
 	      d.version = 1;
 	      d.family = 2; // core
 	      r2.services.add (d);
-	      //d.family = 3; // device management
-	      //r2.services.add (d);
+	      d.family = 3; // device management // FAKE
+	      r2.services.add (d);
 	      d.family = 4;
 	      if (tunnel)
 		r2.services.add (d);
@@ -453,6 +451,7 @@ EIBnetServer::Run (pth_sem_t * stop1)
 	      EIBnet_ConnectionStateResponse r2;
 	      if (parseEIBnet_ConnectionStateRequest (*p1, r1))
 		goto out;
+	      TRACEPRINTF (t, 8, this, "CONNECTIONSTATE_REQ");
 	      for (i = 0; i < state (); i++)
 		if (state[i].channel == r1.channel)
 		  {
@@ -477,6 +476,7 @@ EIBnetServer::Run (pth_sem_t * stop1)
 	      EIBnet_DisconnectResponse r2;
 	      if (parseEIBnet_DisconnectRequest (*p1, r1))
 		goto out;
+	      TRACEPRINTF (t, 8, this, "DISCONNECT_REQ");
 	      for (i = 0; i < state (); i++)
 		if (state[i].channel == r1.channel)
 		  {
@@ -506,6 +506,7 @@ EIBnetServer::Run (pth_sem_t * stop1)
 	      EIBnet_ConnectResponse r2;
 	      if (parseEIBnet_ConnectRequest (*p1, r1))
 		goto out;
+	      TRACEPRINTF (t, 8, this, "CONNECTION_REQ");
 	      r2.status = 0x22;
 	      if (r1.CRI () == 3 && r1.CRI[0] == 4 && tunnel)
 		{
@@ -553,6 +554,7 @@ EIBnetServer::Run (pth_sem_t * stop1)
 	      for (i = 0; i < state (); i++)
 		if (state[i].channel == r1.channel)
 		  goto reqf;
+              TRACEPRINTF (t, 8, this, "Channel %d not found", r1.channel);
 	      goto out;
 	    reqf:
 	      if (!compareIPAddress (p1->src, state[i].daddr))
@@ -626,6 +628,7 @@ EIBnetServer::Run (pth_sem_t * stop1)
 	      for (i = 0; i < state (); i++)
 		if (state[i].channel == r1.channel)
 		  goto reqf1;
+              TRACEPRINTF (t, 8, this, "Channel %d not found", r1.channel);
 	      goto out;
 	    reqf1:
 	      if (!compareIPAddress (p1->src, state[i].daddr))
@@ -671,6 +674,7 @@ EIBnetServer::Run (pth_sem_t * stop1)
 	      for (i = 0; i < state (); i++)
 		if (state[i].channel == r1.channel)
 		  goto reqf3;
+              TRACEPRINTF (t, 8, this, "Channel %d not found", r1.channel);
 	      goto out;
 	    reqf3:
 	      if (!compareIPAddress (p1->src, state[i].daddr))
@@ -680,6 +684,7 @@ EIBnetServer::Run (pth_sem_t * stop1)
 		}
 	      if (state[i].rno == (r1.seqno + 1) & 0xff)
 		{
+		  TRACEPRINTF (t, 8, this, "Missed ACK %d", r1.seqno);
 		  r2.channel = r1.channel;
 		  r2.seqno = r1.seqno;
 		  sock->sendaddr = state[i].daddr;
@@ -696,7 +701,7 @@ EIBnetServer::Run (pth_sem_t * stop1)
 	      r2.seqno = r1.seqno;
 	      if (state[i].type == 2 && r1.CEMI () > 1)
 		{
-		  if (r1.CEMI[0] == 0xFC)
+		  if (r1.CEMI[0] == 0xFC) // property read req
 		    {
 		      if (r1.CEMI () == 7)
 			{
@@ -706,19 +711,24 @@ EIBnetServer::Run (pth_sem_t * stop1)
 			  int prop = r1.CEMI[4];
 			  int count = (r1.CEMI[5] >> 4) & 0x0f;
 			  int start = (r1.CEMI[5] & 0x0f) | r1.CEMI[6];
+		          TRACEPRINTF (t, 8, this, "ReadProp obj=%d objno=%d prop=%d count=%d start=%d",
+                                       obj, objno, prop, count, start);
 			  res.resize (1);
 			  res[0] = 0;
-			  if (obj == 0 && objno == 0)
+			  r2.status = 0x00;
+			  if (obj == 0 && objno == 0 && prop == 0 && start == 1)
 			    {
-			      if (prop == 0)
-				{
-				  res.resize (2);
-				  res[0] = 0;
-				  res[1] = 0;
-				  start = 0;
-				}
-			      else
-				count = 0;
+			      res.resize (2);
+			      res[0] = 0;
+			      res[1] = 0;
+			      start = 0;
+			    }
+			  else if (obj == 0 && objno == 1 && prop == 83 && start == 1)
+			    {
+			      res.resize (1);
+			      res[0] = 0x07;
+			      objno = 0;
+			      //start = 0;
 			    }
 			  else
 			    count = 0;
@@ -731,18 +741,26 @@ EIBnetServer::Run (pth_sem_t * stop1)
 			  CEMI[5] = ((count & 0x0f) << 4) | (start >> 8);
 			  CEMI[6] = start & 0xff;
 			  CEMI.setpart (res, 7);
-			  r2.status = 0x00;
 			  state[i].out.put (CEMI);
 			  pth_sem_inc (state[i].outsignal, 0);
 			}
 		      else
-			r2.status = 0x26;
+			{
+		          TRACEPRINTF (t, 8, this, "Wrong CEMI len %d", r1.CEMI ());
+			  r2.status = 0x26;
+			}
 		    }
 		  else
-		    r2.status = 0x26;
+		    {
+		      TRACEPRINTF (t, 8, this, "Wrong CEMI.0=x%02x", r1.CEMI[0]);
+		      r2.status = 0x26;
+		    }
 		}
 	      else
-		r2.status = 0x29;
+		{
+		  TRACEPRINTF (t, 8, this, "Wrong type=%d len=%d", state[i].type, r1.CEMI ());
+		  r2.status = 0x29;
+		}
 	      state[i].rno++;
 	      if (state[i].rno > 0xff)
 		state[i].rno = 0;
@@ -758,6 +776,7 @@ EIBnetServer::Run (pth_sem_t * stop1)
 	      for (i = 0; i < state (); i++)
 		if (state[i].channel == r1.channel)
 		  goto reqf2;
+              TRACEPRINTF (t, 8, this, "Channel %d not found", r1.channel);
 	      goto out;
 	    reqf2:
 	      if (!compareIPAddress (p1->src, state[i].daddr))
@@ -811,12 +830,13 @@ EIBnetServer::Run (pth_sem_t * stop1)
       for (i = 0; i < state (); i++)
 	{
 	  if ((state[i].state
-	       && pth_event_status (state[i].sendtimeout) ==
-	       PTH_STATUS_OCCURRED) || (!state[i].state
-					&& !state[i].out.isempty ()))
+	       && pth_event_status (state[i].sendtimeout)
+                  == PTH_STATUS_OCCURRED)
+              || (!state[i].state && !state[i].out.isempty ()))
 	    {
-	      TRACEPRINTF (t, 8, this, "TunnelSend %d", state[i].channel);
 	      state[i].state++;
+	      TRACEPRINTF (t, 8, this, "TunnelSend channel=%d type=%d state=%d",
+			   state[i].channel, state[i].type, state[i].state);
 	      if (state[i].state > 10)
 		{
 		  state[i].out.get ();
