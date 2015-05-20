@@ -100,6 +100,12 @@ class Layer3:private Thread
   eibaddr_t defaultAddr;
   Array < IgnoreInfo > ignore;
 
+  /** Start of address block to assign dynamically to clients */
+  eibaddr_t client_addrs_start;
+  /** Length of address block to assign dynamically to clients */
+  int client_addrs_len;
+  int client_addrs_pos;
+
   /** busmonitor callbacks */
   Array < Busmonitor_Info > busmonitor;
   /** vbusmonitor callbacks */
@@ -177,6 +183,11 @@ public:
   /** check if any interface accepts this group address.
       'l2' says which interface NOT to check. */
   bool hasGroupAddress (eibaddr_t addr, Layer2Interface *l2 = 0);
+
+  /** Tell this Layer3 that it may allocate dynamic client addresses from this range */
+  void set_client_block (eibaddr_t r_start, int r_len);
+  /** Get a free dynamic address */
+  eibaddr_t get_client_addr ();
 };
 
 

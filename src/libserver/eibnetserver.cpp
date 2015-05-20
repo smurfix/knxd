@@ -225,7 +225,8 @@ EIBnetServer::delBusmonitor ()
 }
 
 int
-EIBnetServer::addClient (int type, const EIBnet_ConnectRequest & r1)
+EIBnetServer::addClient (int type, const EIBnet_ConnectRequest & r1,
+                         eibadd_t addr = 0)
 {
   int i;
   int id = 1;
@@ -254,6 +255,7 @@ rt:
       state[pos].no = 1;
       state[pos].type = type;
       state[pos].nat = r1.nat;
+      state[pos].addr = addr;
     }
   return id;
 }
@@ -508,13 +510,14 @@ EIBnetServer::Run (pth_sem_t * stop1)
 	      r2.status = 0x22;
 	      if (r1.CRI () == 3 && r1.CRI[0] == 4 && tunnel)
 		{
+		  eibaddr_t a = l3->get_client_addr ();
 		  r2.CRD.resize (3);
 		  r2.CRD[0] = 0x04;
-		  r2.CRD[1] = 0x00;
-		  r2.CRD[2] = 0x00;
+		  r2.CRD[1] = (a >> 8) & 0xFF;
+		  r2.CRD[2] = (a >> 0) & 0xFF;
 		  if (r1.CRI[1] == 0x02 || r1.CRI[1] == 0x80)
 		    {
-		      int id = addClient ((r1.CRI[1] == 0x80) ? 1 : 0, r1);
+		      int id = addClient ((r1.CRI[1] == 0x80) ? 1 : 0, r1, a);
 		      if (id <= 0xff)
 			{
 			  if (r1.CRI[1] == 0x80)

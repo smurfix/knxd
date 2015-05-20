@@ -58,6 +58,10 @@ struct arguments
   int errorlevel;
   /** EIB address (for some backends) */
   eibaddr_t addr;
+  /** Start of address block to be assigned dynamically to clients */
+  eibaddr_t alloc_addrs;
+  /** Length of address block to be assigned dynamically to clients */
+  int alloc_addrs_len;
   /* EIBnet/IP server */
   bool tunnel;
   bool route;
@@ -144,6 +148,15 @@ readaddr (const char *addr)
   return ((a & 0x0f) << 12) | ((b & 0x0f) << 8) | ((c & 0xff));
 }
 
+bool
+readaddrblock (struct arguments *args, const char *addr)
+{
+  int a, b, c;
+  if (sscanf (addr, "%d.%d.%d", &a, &b, &c, &args->alloc_addrs_len) != 4)
+    die ("Address block needs to look like X.X.X:X");
+  args->alloc_addrs = ((a & 0x0f) << 12) | ((b & 0x0f) << 8) | ((c & 0xff));
+}
+
 /** version */
 const char *argp_program_version = "knxd " VERSION;
 /** documentation */
@@ -172,7 +185,9 @@ static struct argp_option options[] = {
   {"trace", 't', "LEVEL", 0, "set trace level"},
   {"error", 'f', "LEVEL", 0, "set error level"},
   {"eibaddr", 'e', "EIBADDR", 0,
-   "set our own EIB-address to EIBADDR (default 0.0.1), for drivers, which need an address"},
+   "set our own EIB-address to EIBADDR (default 0.0.1)"},
+  {"client-addrs", 'E', "ADDRSTART", 0,
+   "assign addresses ADDRSTART through ADDRSTART+n (default 0.0.100:99) to clients"},
   {"pid-file", 'p', "FILE", 0, "write the PID of the process to FILE"},
   {"daemon", 'd', "FILE", OPTION_ARG_OPTIONAL,
    "start the programm as daemon, the output will be written to FILE, if the argument present"},
@@ -240,6 +255,9 @@ parse_opt (int key, char *arg, struct argp_state *state)
       break;
     case 'e':
       arguments->addr = readaddr (arg);
+      break;
+    case 'E':
+      readaddrblock (arguments, arg);
       break;
     case 'p':
       arguments->pidfile = arg;
@@ -327,7 +345,9 @@ main (int ac, char *ag[])
 #endif
 
   memset (&arg, 0, sizeof (arg));
-  arg.addr = 0x0001;
+  arg.addr = 0x0001; // 0.0.1
+  arg.alloc_addrs = 0x0064; // 0.0.100
+  arg.alloc_addrs_len = 99;
   arg.errorlevel = LEVEL_WARNING;
 
   argp_parse (&argp, ac, ag, 0, &index, &arg);
@@ -384,6 +404,7 @@ main (int ac, char *ag[])
       }
 
   l3 = new Layer3 (arg.addr, &t);
+  l3->set_client_block (arg.alloc_addrs, arg.alloc_addrs_len);
   FakeL2 = new DummyLayer2Interface(l3);
 #ifdef HAVE_GROUPCACHE
   if (!CreateGroupCache (l3, &t, arg.groupcache))
